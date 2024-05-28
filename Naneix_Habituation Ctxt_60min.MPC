@@ -1,0 +1,118 @@
+\*************************************************
+\ Context habituation
+\*************************************************
+
+\NaneixLab
+\Written by Fabien Naneix
+\Program runs for 60 min. HLight and fan on. No stim, levers or rewards
+\Last edited May 2024
+
+\********
+\ INPUTS
+\********
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^HLIGHT = 6
+^FAN = 9
+
+\**********
+\ VARIABLES
+\**********
+\A = Counters -> A(0) = Total visits (head entries)
+\B =
+\C =
+\D =
+\E = onset head entries
+\F = offset head entries
+\G = time spent in magazine
+\H =
+\I =
+\J =
+\K =
+\L =
+\M =
+\N =
+\O = visit toggle
+\P =
+\Q =
+\R =
+\S =
+\T = Time
+\U = Time max
+\V =
+\W =
+\X =
+\Y =
+\Z =
+
+\******
+\ ARRAY
+\******
+DIM E = 10000 \timing of head entries onset
+DIM F = 10000 \timing of head entries offset
+
+\******
+\LISTS
+\******
+LIST A = 0
+
+\********
+\Z-PULSES
+\********
+^HE = 1 \head entries toggle
+
+\*************************************************
+\ Initialize program, timer and end time condition
+\*************************************************
+S.S.1,
+    S1,
+    #START: ON ^HLIGHT, ^FAN; SET T = 0;---> S2 \turns house light and fan ON, setup time at 0
+
+    S2,
+    0.01": SET T = T + 0.01; IF T >= 3600 [@END, @CONTINUE] \increment time with 0.01 sec
+        @END: OFF ^HLight, ^Fan; ---> STOPABORTFLUSH \end program and save data after 60min
+        @CONTINUE: ---> Sx
+
+\*********************
+\ Head Entries counter
+\*********************
+S.S.2 \magazine toggle to detect onset and offset of the visits
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^VISITS: SET O = 1; Z^HE; ---> S2 \Detect head entry, set the toggle the 1
+    0.02": SET O = 0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+S.S.3 \magazine entries
+    S1,
+    #Z^HE: SET E(A(0)) = T; ---> S2 \save timing of head entries onset in E
+
+    S2,
+    0.02": IF O = 0 [@VISITOFF, @CONTINUE] \when head entries stops, save offset time and increment number of head entries
+            @VISITOFF: SET O = 0, F(A(0)) = T; ADD A(0); SET E(A(0)) = -987.987, F(A(0)) = -987.987; ---> S1
+            @CONTINUE: ---> S2
+
+\****************
+\ Magazine time
+\****************
+S.S.4
+    S1,
+    #Z^HE: ---> S2
+
+    S2,
+    0.01": SET G = G + 0.01; ---> S1
+
+
+\***************
+\DISPLAY MODULE
+\***************
+S.S.5
+    S1,
+   #START: ---> S2
+
+    S2,
+    0.001": SHOW 1, Time elapsed, T ; SHOW 2, Total Visits, A(0); SHOW 3, Visits time, G; ---> Sx

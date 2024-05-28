@@ -1,0 +1,151 @@
+\**********************************
+\ Instrumental conditioning - Extinction test
+\**********************************
+
+\NaneixLab 2021
+\Written by Fabien Naneix
+\Program runs for 15 min max. 2 levers. No rewards
+\Last update 14-05-23
+
+\********
+\ INPUTS
+\********
+^LEVER1 = 1
+^LEVER2= 2
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^LEVER1 = 1
+^LEVER2= 2
+^PELLET = 3
+^LIGHT1 = 4
+^LIGHT2= 5
+^HLIGHT = 6
+^SPEAKER = 8
+^FAN = 9
+^MAG_LIGHT = 10
+
+\**********
+\ VARIABLES
+\**********
+\A = COUNTERS -> A(0) = pellets, A(1) = Lever 1-all, A(2) = Lever 1-5min, A(3) = Lever1-10min, A(4) = Lever1-15 min,
+\                A(5) = Lever 2-all, A(6) = L2-5min, A(7) = Lever2-10min, A(8) = Lever2-15 min,
+\                A(9) = Visits-all, A(10) = Visits-5min, A(11) = Visits-10min, A(12) = Visits-15min
+\B = timing L1
+\C = timing L2
+\D = timing pellet
+\E = onset head entries
+\F = offset head entries
+\G = time spent in magazine
+\N = pellet max
+\O = visit toggle
+\T = time
+\U = time max
+
+
+\******
+\ ARRAY
+\******
+DIM B = 10000
+DIM C = 10000
+DIM D = 30
+DIM E = 10000
+DIM F = 10000
+
+
+\******
+\LISTS
+\******
+LIST A = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+
+\*************************************************
+\ Initialize program, timer and end time condition
+\*************************************************
+S.S.1,
+    S1,
+    #START: ON ^HLIGHT, ^FAN, ^LEVER1, ^LEVER2; SET T = 0, N = 30;---> S2 \turns house light and fan ON, setup max pellet
+
+    S2,
+    0.01": SET T = T + 0.01; IF T >= 900 [@END, @CONTINUE] \increment time with 0.01 sec
+        @END: OFF ^HLight, ^Fan, ^Lever1, ^Lever2; ---> STOPABORTFLUSH \end program and save data
+        @CONTINUE: ---> Sx
+
+
+\***********************************************
+\ Fixed ratio block and max reward end condition
+\***********************************************
+S.S.2,
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^LEVER1: Z1; ---> S2
+    #R^LEVER2: Z2; ---> S2
+
+
+\***************
+\ Lever counter
+\***************
+S.S.3,
+    S1,
+    #Z1: SET B(A(1)) = T; ADD A(1); SET B(A(1)) = -987.987; IF T <= 300 [@5MIN, @OTHER]
+        @5MIN: ADD A(2); ---> Sx
+        @OTHER: IF T <= 600 [@10MIN, @15MIN]
+            @10MIN: ADD A(3); ---> Sx
+            @15MIN: ADD A(4); ---> Sx
+
+    #Z2: SET C(A(5)) = T; ADD A(5); SET C(A(5)) = -987.987; IF T <= 300 [@5MIN, @OTHER]
+        @5MIN: ADD A(6); ---> Sx
+        @OTHER: IF T <= 600 [@10MIN, @15MIN]
+            @10MIN: ADD A(7); ---> Sx
+            @15MIN: ADD A(8); ---> Sx
+
+\****************
+\ Entries counter
+\****************
+S.S.4 \magazine toggle to detect onset and offset of the visits
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^VISITS: SET O = 1; Z3; ---> S2 \Detect visit, set the toggle the 1
+    0.02": SET O = 0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+S.S.5 \magazine entries
+    S1,
+    #Z3: SET E(A(9)) = T; ---> S2
+
+    S2,
+    0.02": IF O = 0 [@VISITOFF, @CONTINUE] /when visit stops save offset time and increment number of total and cs+ visits
+            @VISITOFF: SET O = 0, F(A(9)) = T; ADD A(9); SET E(A(9)) = -987.987, F(A(9)) = -987.987; IF T <= 300 [@5MIN, @OTHER]
+                @5MIN: ADD A(10); ---> S1
+                @OTHER: IF T <= 600 [@10MIN, @15MIN]
+                    @10MIN: ADD A(11); ---> S1
+                    @15MIN: ADD A(12); ---> S1
+            @CONTINUE: ---> S2
+
+
+\****************
+\ Magazine time
+\****************
+S.S.6
+    S1,
+    #Z3: ---> S2
+
+    S2,
+    0.01": SET G = G + 0.01; ---> S1
+
+
+\***************
+\DISPLAY MODULE
+\***************
+S.S.7
+    S1,
+   #START: ---> S2
+
+    S2,
+    0.001": SHOW 1, Time elapsed, T ; SHOW 2, Lever 1-5min, A(2); SHOW 3, Lever 1-10min, A(3); SHOW 4, Lever 1-15min, A(4); SHOW 5, Lever 2-5min, A(6); SHOW 6, Lever 2-10min, A(7); SHOW 7, Lever 2-15min, A(8);
+            SHOW 8, Visits-5min, A(10); SHOW 9, Visits-10min, A(11); SHOW 10, Visits-15min, A(12); SHOW 11, Visits time, G; ---> Sx

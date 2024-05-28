@@ -1,0 +1,178 @@
+\**********************************
+\ Progressive ratio
+\**********************************
+
+\NaneixLab 2021
+\Written by Fabien Naneix
+\Edited Fabien Naneix 07/2023
+\Program runs for 120 min max. Lever 2 active. Stop after  20 min without reward
+
+\********
+\ INPUTS
+\********
+^LEVER1 = 1
+^LEVER2= 2
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^LEVER1 = 1
+^LEVER2= 2
+^PELLET = 3
+^LIGHT1 = 4
+^LIGHT2= 5
+^HLIGHT = 6
+^SPEAKER = 8
+^FAN = 9
+^MAG_LIGHT = 10
+
+\**********
+\ VARIABLES
+\**********
+\A = COUNTERS -> A(0) = pellets, A(1) = Lever 1, A(2) = Lever 2, A(3) = head entries, A(4)= breakpoint
+\B = timing L1
+\C = timing L2
+\D = timing pellet
+\E = onset head entries
+\F = offset head entries
+\G = time spent in magazine
+\H = LP counter for each trial
+\N = pellet max
+\O = visit toggle
+\R = list ratio
+\S = Current ratio
+\T = time
+\U = time max
+\W = timer since last reward (>20 min then end)
+\X = selected ratio
+
+\******
+\ ARRAY
+\******
+DIM B = 10000
+DIM C = 10000
+DIM D = 10000
+DIM E = 10000
+DIM F = 10000
+
+
+\******
+\LISTS
+\******
+LIST A = 0, 0, 0, 0, 0
+LIST R = 1,2,4,6,9,12,15,20,25,32,40,50,62,77,95,118,145,178,219,268,328,402,492,603,737,901,1102,1347,1646,2012
+
+
+\*************************************************
+\ Initialize program, timer and end time condition
+\*************************************************
+S.S.1,
+    S1,
+    #START: ON ^HLIGHT, ^FAN, ^LEVER1, ^LEVER2; SET T = 0, N = 100;---> S2 \turns house light and fan ON, setup max pellet
+
+    S2,
+    0.01": SET T = T + 0.01; IF T >= 7200 [@END, @CONTINUE] \increment time with 0.01 sec
+        @END: OFF ^HLight, ^Fan, ^Lever1, ^Lever2; ---> STOPABORTFLUSH \end program after 120 min and save data
+        @CONTINUE: ---> Sx
+
+
+\***********************************************
+\ Progressive ratio  Lever 2
+\***********************************************
+S.S.2,
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^LEVER1: Z1; ---> S2
+    #R^LEVER2: Z2; ---> S2
+
+S.S.3,
+    S1,
+    #START: ---> S2
+
+    S2,
+    0.001": LIST S = R(X); SET H = 0; ---> S3
+
+    S3,
+    #Z2: ADD H; IF H >= S [@PELLET, @CONTINUE]
+        @PELLET: ---> S4
+        @CONTINUE: ---> S3
+
+    S4,
+    0.5": ON^PELLET, ^LIGHT2, ^MAG_LIGHT; SET D(A(0)) = T; ADD A(0); SET D(A(0)) = -987.987; SET A(4) = S; Z4; ---> S5
+
+    S5,
+    4.5": OFF^PELLET, ^LIGHT2, ^MAG_LIGHT; SET H = 0; ---> S2
+
+
+\***************
+\ Lever counter
+\***************
+S.S.4,
+    S1,
+    #Z1: SET B(A(1)) = T; ADD A(1); SET B(A(1)) = -987.987; ---> Sx
+    #Z2: SET C(A(2)) = T; ADD A(2); SET C(A(2)) = -987.987; ---> Sx
+
+
+\****************
+\ Entries counter
+\****************
+S.S.5 \magazine toggle to detect onset and offset of the visits
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^VISITS: SET O = 1; Z3; ---> S2 \Detect visit, set the toggle the 1
+    0.02": SET O = 0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+S.S.6 \magazine entries
+    S1,
+    #Z3: SET E(A(3)) = T; ---> S2
+
+    S2,
+    0.02": IF O = 0 [@VISITOFF, @CONTINUE] /when visit stops save offset time and increment number of total visits
+            @VISITOFF: SET O = 0, F(A(3)) = T; ADD A(3); SET E(A(3)) = -987.987, F(A(3)) = -987.987; ---> S1
+            @CONTINUE: ---> S2
+
+\****************
+\ Magazine time
+\****************
+S.S.7
+    S1,
+    #Z3: ---> S2
+
+    S2,
+    0.01": SET G = G + 0.01; ---> S1
+
+
+\***********
+\END MODULE
+\***********
+S.S.8
+    S1,
+    #Z4: SET W=0; ---> S2 \start the timer since the last reward
+
+    S2,
+    0.01": SET W = W + 0.01 ; ---> Sx
+    #Z4: SET W=0 ; ---> S2
+
+S.S.9
+    S1,
+    #START: ---> S2
+    S2,
+    0.01": IF W >= 1200 [@END, @CONTINUE]
+        @END: OFF ^HLight, ^Fan, ^Lever1, ^Lever2; ---> STOPABORTFLUSH \end program and save data if the animal did not get reward since 20 min
+        @CONTINUE: ---> Sx
+
+
+\***************
+\DISPLAY MODULE
+\***************
+S.S.10
+    S1,
+   #START: ---> S2
+
+    S2,
+    0.001": SHOW 1, Time elapsed, T ; SHOW 2, Total pellets, A(0); SHOW 3, Lever 1, A(1); SHOW 4, Lever 2, A(2); SHOW 5, Visits, A(3); SHOW 6, Visits time, G; SHOW 7, BP, A(4); SHOW 8, Time last reward, W;---> Sx

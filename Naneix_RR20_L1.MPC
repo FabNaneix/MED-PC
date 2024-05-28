@@ -1,0 +1,158 @@
+\**********************************
+\ Instrumental conditioning - FR1
+\**********************************
+
+\NaneixLab 2021
+\Written by Fabien Naneix
+\Program runs for 30 min max or 30 rewards. Fixed ratio 1 Lever 1 (1 active lever  =1 pellet)
+
+\********
+\ INPUTS
+\********
+^LEVER1 = 1
+^LEVER2= 2
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^LEVER1 = 1
+^LEVER2= 2
+^PELLET = 3
+^LIGHT1 = 4
+^LIGHT2= 5
+^HLIGHT = 6
+^SPEAKER = 8
+^FAN = 9
+^MAG_LIGHT = 10
+
+\**********
+\ VARIABLES
+\**********
+\A = COUNTERS -> A(0) = pellets, A(1) = Lever 1, A(2) = Lever 2, A(3) = head entries
+\B = timing L1
+\C = timing L2
+\D = timing pellet
+\E = onset head entries
+\F = offset head entries
+\G = time spent in magazine
+\H = LP counter for each trial
+\N = pellet max
+\O = visit toggle
+\R = list random ratio
+\S = selected RR for current trial
+\T = time
+\U = time max
+
+
+\******
+\ ARRAY
+\******
+DIM B = 10000
+DIM C = 10000
+DIM D = 10000
+DIM E = 10000
+DIM F = 10000
+
+
+\******
+\LISTS
+\******
+LIST A = 0, 0, 0, 0
+LIST R =10,16,25,20,29,17,12,26,11,13,27,18,22,19,15,21,30,14,28,24,23,18,29,23,16,15,22,21,12,24
+
+
+\*************************************************
+\ Initialize program, timer and end time condition
+\*************************************************
+S.S.1,
+    S1,
+    #START: ON ^HLIGHT, ^FAN, ^LEVER1, ^LEVER2; SET T = 0, N = 100;---> S2 \turns house light and fan ON, setup max pellet
+
+    S2,
+    0.01": SET T = T + 0.01; IF T >= 1800 [@END, @CONTINUE] \increment time with 0.01 sec
+        @END: OFF ^HLight, ^Fan, ^Lever1, ^Lever2; ---> STOPABORTFLUSH \end program and save data
+        @CONTINUE: ---> Sx
+
+
+\***********************************************
+\ Fixed ratio block and max reward end condition
+\***********************************************
+S.S.2,
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^LEVER1: Z1; ---> S2
+    #R^LEVER2: Z2; ---> S2
+
+S.S.3,
+    S1,
+    #START: ---> S2
+
+    S2,
+    0.001": RANDD S = R; SET H =0; ---> S3
+
+    S3,
+    #Z1: ADD H; IF H >= S [@PELLET, @CONTINUE]
+        @PELLET: ---> S4
+        @CONTINUE: ---> S3
+
+    S4,
+    0.5": ON^PELLET, ^LIGHT1, ^MAG_LIGHT; SET D(A(0)) = T; ADD A(0); SET D(A(0)) = -987.987; ---> S5
+
+    S5,
+    4.5": OFF^PELLET, ^LIGHT1, ^MAG_LIGHT; SET H = 0; IF A(0) >= N [@END, @CONTINUE]
+        @END: OFF ^HLight, ^Fan, ^Lever1, ^Lever2; ---> STOPABORTFLUSH \end program and save data
+        @CONTINUE: ---> S2
+
+
+\***************
+\ Lever counter
+\***************
+S.S.4,
+    S1,
+    #Z1: SET B(A(1)) = T; ADD A(1); SET B(A(1)) = -987.987; ---> Sx
+    #Z2: SET C(A(2)) = T; ADD A(2); SET C(A(2)) = -987.987; ---> Sx
+
+
+\****************
+\ Entries counter
+\****************
+S.S.5 \magazine toggle to detect onset and offset of the visits
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^VISITS: SET O = 1; Z3; ---> S2 \Detect visit, set the toggle the 1
+    0.02": SET O = 0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+S.S.6 \magazine entries
+    S1,
+    #Z3: SET E(A(3)) = T; ---> S2
+
+    S2,
+    0.02": IF O = 0 [@VISITOFF, @CONTINUE] /when visit stops save offset time and increment number of total and cs+ visits
+            @VISITOFF: SET O = 0, F(A(3)) = T; ADD A(3); SET E(A(3)) = -987.987, F(A(3)) = -987.987; ---> S1
+            @CONTINUE: ---> S2
+
+\****************
+\ Magazine time
+\****************
+S.S.7
+    S1,
+    #Z3: ---> S2
+
+    S2,
+    0.01": SET G = G + 0.01; ---> S1
+
+
+\***************
+\DISPLAY MODULE
+\***************
+S.S.8
+    S1,
+   #START: ---> S2
+
+    S2,
+    0.001": SHOW 1, Time elapsed, T ; SHOW 2, Total pellets, A(0); SHOW 3, Lever 1, A(1); SHOW 4, Lever 2, A(2); SHOW 5, Visits, A(3); SHOW 6, Visits time, G; ---> Sx

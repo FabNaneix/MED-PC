@@ -1,0 +1,175 @@
+\**********************************
+\ Instrumental conditioning - VI15
+\**********************************
+
+\NaneixLab
+\Written by Fabien Naneix
+\Program runs for 30 min max or 30 reward max. Variable interval 15 sec
+\last edited 06-05-23
+
+\********
+\ INPUTS
+\********
+^LEVER1 = 1
+^LEVER2= 2
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^LEVER1 = 1
+^LEVER2= 2
+^PELLET = 3
+^LIGHT1 = 4
+^LIGHT2= 5
+^HLIGHT = 6
+^SPEAKER = 8
+^FAN = 9
+^MAG_LIGHT = 10
+
+\**********
+\ VARIABLES
+\**********
+\A = COUNTERS -> A(0) = pellets, A(1) = Lever 1, A(2) = Lever 2, A(3) = head entries
+\B = timing L1
+\C = timing L2
+\D = timing pellet
+\E = onset head entries
+\F = offset head entries
+\G = time spent in magazine
+\H = LP counter for each trial
+\I = list variable interval
+\J = selected ITI without replacement
+\K = ITI in seconds
+\N = pellet max
+\O = visit toggle
+\T = time
+\U = time max
+
+
+\******
+\ ARRAY
+\******
+DIM B = 10000
+DIM C = 10000
+DIM D = 10000
+DIM E = 10000
+DIM F = 10000
+
+
+\******
+\LISTS
+\******
+LIST A = 0, 0, 0, 0
+LIST I = 25, 6, 13, 14, 16, 9, 9, 19, 18, 24, 12, 12, 6, 10, 21, 6, 12, 20, 18, 11, 16, 14, 24, 15, 9, 19, 21, 14, 25, 24 \list ITI (VI 15 sec)
+
+\******
+\Z-PULSES
+\******
+^L1 = 1
+^L2 = 2
+^Mag = 3
+^Reward = 4
+
+\*************************************************
+\ Initialize program, timer and end time condition
+\*************************************************
+S.S.1,
+    S1,
+    #START: ON ^HLIGHT, ^FAN, ^LEVER1, ^LEVER2; SET T = 0, N = 30;---> S2 \turns house light and fan ON, setup max pellet
+
+    S2,
+    0.01": SET T = T + 0.01; IF T >= 1800 [@END, @CONTINUE] \increment time with 0.01 sec
+        @END: OFF ^HLight, ^Fan, ^Lever1, ^Lever2; ---> STOPABORTFLUSH \end program and save data
+        @CONTINUE: ---> Sx
+
+\*******************
+\ Variable interval
+\*******************
+S.S.8,
+     S1,
+     #START: RANDD J = I; SET K = J * 1"; ---> S2 \select ITI randomly from I list and convert it in second (K)
+
+     S2,
+     K#T: SET X = 1 ---> S3
+
+     S3,
+     #Z^Reward: RANDD J = I; SET K = J * 1"; ---> S2 \ Select new ITI after reward delivery and convert it in seconds
+
+\***********************************************
+\ Lever and reward delivery
+\***********************************************
+S.S.2,
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^LEVER1: Z^L1; ---> S2
+    #R^LEVER2: Z^L2; ---> S2
+
+S.S.3,
+    S1,
+    #START: ---> S2
+
+    S2,
+    #Z^L2: If X = 1 [@PELLET, @CONTINUE] \wait the end of ITI (K) to deliver pellet after lever press
+        @PELLET: SET X = 0 ---> S3
+        @CONTINUE: ---> S2
+
+    S3,
+    0.5": ON^PELLET, ^LIGHT2, ^MAG_LIGHT; SET D(A(0)) = T; ADD A(0); SET D(A(0)) = -987.987; Z^Reward ---> S4
+
+    S4,
+    4.5": OFF^PELLET, ^LIGHT2, ^MAG_LIGHT; IF A(0) >= N [@END, @CONTINUE]
+        @END: OFF ^HLight, ^Fan, ^Lever1, ^Lever2; ---> STOPABORTFLUSH \end program and save data
+        @CONTINUE: ---> S2
+
+
+\***************
+\ Lever counter
+\***************
+S.S.4,
+    S1,
+    #Z^L1: SET B(A(1)) = T; ADD A(1); SET B(A(1)) = -987.987; ---> Sx
+    #Z^L2: SET C(A(2)) = T; ADD A(2); SET C(A(2)) = -987.987; ---> Sx
+
+\****************
+\ Entries counter
+\****************
+S.S.5 \magazine toggle to detect onset and offset of the visits
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^VISITS: SET O = 1; Z^Mag; ---> S2 \Detect visit, set the toggle the 1
+    0.02": SET O = 0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+S.S.6 \magazine entries
+    S1,
+    #Z^Mag: SET E(A(3)) = T; ---> S2
+
+    S2,
+    0.02": IF O = 0 [@VISITOFF, @CONTINUE] /when visit stops save offset time and increment number of total and cs+ visits
+            @VISITOFF: SET O = 0, F(A(3)) = T; ADD A(3); SET E(A(3)) = -987.987, F(A(3)) = -987.987; ---> S1
+            @CONTINUE: ---> S2
+
+\****************
+\ Magazine time
+\****************
+S.S.7
+    S1,
+    #Z^Mag: ---> S2
+
+    S2,
+    0.01": SET G = G + 0.01; ---> S1
+
+
+\***************
+\DISPLAY MODULE
+\***************
+S.S.9
+    S1,
+   #START: ---> S2
+
+    S2,
+    0.001": SHOW 1, Time elapsed, T ; SHOW 2, Total pellets, A(0); SHOW 3, Lever 1, A(1); SHOW 4, Lever 2, A(2); SHOW 5, Visits, A(3); SHOW 6, Visits time, G; ---> Sx

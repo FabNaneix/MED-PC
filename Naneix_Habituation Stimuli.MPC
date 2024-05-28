@@ -1,0 +1,220 @@
+\*************************************************
+\ Stimuli habituation
+\*************************************************
+
+\NaneixLab
+\Written by Fabien Naneix
+\Program runs for ~50 min. HLight and fan on. 4 presentations of Tone and White noise (2 min each). No reward. No levers
+\Last edited May 2024
+
+\********
+\ INPUTS
+\********
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^HLIGHT = 6
+^TONE = 8
+^FAN = 9
+^WN = 11
+
+\**********
+\ VARIABLES
+\**********
+\A = Head entries Tone -> A(0)=Total, A(1)=Tone1, A(2)=Tone2, A(3)=Tone3, A(4)=Tone4
+\B = Head entries White Noise -> B(0)=Total, B(1)=WN1, B(2)=WN2, B(3)=WN3, B(4)=WN4
+\C = Head entries ITI -> C(0)=Total
+\D = Current stimulus selected from list E
+\E = List Stimuli
+\F = Onset Tone
+\G = Offset Tone
+\H = Onset head entries Tone
+\I = Offset head entries Tone
+\J = Onset WN
+\K = Offset WN
+\L = Onset head entries WN
+\M = Offset head entries WN
+\N = Onset head entries ITI
+\O = Offset head entries ITI
+\P = Time spent in magazine (0=Total, 1=Tone, 2=WN, 3=ITI)
+\Q = Stim type array
+\R = Visit toggle
+\S = Stimuli counters -> S(0)=current nbr stim, S(1)=total nbr of stim, S(2)=current nbr tone, S(3)=current nbr WN
+\T = Time
+\U = Time max
+\V = Selected ITI from list W
+\W = List ITI
+\X = ITI in sec
+\Y =
+\Z = current state (0=ITI, 1=tone, 2=white noise)
+
+\******
+\ ARRAY
+\******
+DIM F = 5 \tone onset
+DIM G = 5 \tone offset
+DIM H = 10000 \timing of head entries onset Tone
+DIM I = 10000 \timing of head entries offset Tone
+DIM J = 5 \WN onset
+DIM K = 5 \WN offset
+DIM L = 10000 \timing of head entries onset WN
+DIM M = 10000 \timing of head entries offset WN
+DIM N = 10000 \timing of head entries onset ITI
+DIM O = 10000 \timing of head entries offset ITI
+DIM Q = 8
+
+\******
+\LISTS
+\******
+LIST A = 0, 0, 0, 0, 0
+LIST B = 0, 0, 0, 0, 0
+LIST C = 0
+LIST E = 0, 0, 0, 0, 1, 1, 1, 1
+LIST P = 0, 0, 0, 0
+LIST S = 0, 0, 0, 0
+LIST W = 240, 240, 420, 180, 420, 360, 420, 300, 300 \ITI between 3 and 7 min (avg 5 min)
+
+\********
+\Z-PULSES
+\********
+^HE = 1 \head entries toggle
+^HET = 2 \head entries during tone
+^HEWN = 3 \head entries during WN
+
+\*************************************************
+\ Initialize program, timer and end time condition
+\*************************************************
+S.S.1,
+    S1,
+    #START: ON ^HLIGHT, ^FAN; SET T = 0, S(0) = 0, S(1) = 8;---> S2 \turns house light and fan ON, setup time at 0
+
+    S2,
+    0.01": SET T = T + 0.01; IF T >= 5400 [@END, @CONTINUE] \increment time with 0.01 sec
+        @END: OFF ^HLight, ^Fan; ---> STOPABORTFLUSH \end program and save data after 90 min
+        @CONTINUE: ---> Sx
+
+\**************************************
+\ Variable ITI and stimuli presentation
+\**************************************
+S.S.2,
+     S1,
+     #START: RANDD V=W; SET X=V*1"; SET Z=0; ---> S2 \select ITI randomly from list W and convert it in second (X)
+
+     S2,
+     X#T: RANDD D=E; IF D = 0 [@TONE, @WHITENOISE] \select stimulus at the end of the ITI
+         @TONE: ---> S3
+         @WHITENOISE: ---> S5
+
+     S3,
+     0.001": ON^TONE; SET F(S(2))=T, Q(S(0))=D; SET Z=1; ---> S4 \start tone, record time, record stim type in Q
+
+     S4,
+     120": OFF^TONE; SET G(S(2))=T; ADD S(0), S(2); SET F(S(2))=-987.987, G(S(2))=-987.987; IF S(0)=S(1) [@END, @CONTINUE] \stop tone after 2min, add stim nbr, record time
+         @END: RANDD V=W; SET X=V*1"; SET Z=0; ---> S7
+         @CONTINUE:RANDD V=W; SET X=V*1"; SET Z=0; ---> S2
+
+     S5,
+     0.001": ON^WN; SET J(S(3))=T, Q(S(3))=D; SET Z=2; ---> S6 \start white noise, record time, record stim type in Q
+
+     S6,
+     120": OFF^WN; SET K(S(3))=T; ADD S(0), S(3); SET J(S(3))=-987.987, K(S(3))=-987.987; IF S(0)=S(1) [@END, @CONTINUE] \stop white noise after 2min, add stim nbr, record time
+         @END: RANDD V=W; SET X=V*1"; SET Z=0; ---> S7
+         @CONTINUE: RANDD V=W; SET X=V*1"; SET Z=0; ---> S2
+
+     S7,
+     X#T: OFF ^HLight, ^Fan; ---> STOPABORTFLUSH \end program and save data at the end of the last ITI
+
+
+\*********************
+\ Head Entries counter
+\*********************
+S.S.3 \magazine toggle to detect onset and offset of head entries
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^VISITS: SET R = 1; Z^HE; ---> S2 \Detect visit, set the toggle the 1
+    0.02": SET R=0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+
+S.S.4 \total head entries counter
+    S1,
+    #Z^HE: IF Z=0 [@ITI, @STIM]
+        @ITI: SET N(C(0))=T; ---> S4 \save head entries during ITI
+        @STIM: IF Z=1 [@TONE, @WHITE]
+            @TONE: SET H(A(0))=T; ---> S2 \save head entries during tone
+            @WHITE: SET L(B(0))=T; ---> S3 \save head entries during white noise
+
+    S2, \head entries during tone
+    0.02": IF R=0 [@VISITOFF, @CONTINUE] \when head entries stops, save offset time and increment number of head entries
+        @VISITOFF: SET I(A(0))=T; ADD A(0); SET H(A(0))=-987.987, I(A(0))=-987.987; Z^HET; ---> S1
+        @CONTINUE: ---> S2
+
+    S3, \head entries during white noise
+    0.02": IF R=0 [@VISITOFF, @CONTINUE] \when head entries stops, save offset time and increment number of head entries
+        @VISITOFF: SET M(B(0))=T; ADD B(0); SET L(B(0))=-987.987, M(B(0))=-987.987; Z^HEWN; ---> S1
+        @CONTINUE: ---> S3
+
+    S4, \head entries during ITI
+    0.02": IF R=0 [@VISITOFF, @CONTINUE] \when head entries stops, save offset time and increment number of head entries
+        @VISITOFF: SET O(C(0))=T; ADD C(0); SET N(C(0))=-987.987, O(C(0))=-987.987; ---> S1
+        @CONTINUE: ---> S4
+
+S.S.5 \head entries counter per stim
+    S1,
+    #Z^HET: ---> S2
+    #Z^HEWN: ---> S3
+
+    S2,
+    0.001": IF (S(2)=0) [@CS1, @CONT]
+        @CS1: ADD A(1); ---> S1
+        @CONT: IF (S(2)=1) [@CS2, @CONT]
+            @CS2: ADD A(2); ---> S1
+            @CONT: IF (S(2)=2) [@CS3, @CS4]
+                @CS3: ADD A(3); ---> S1
+                @CS4: ADD A(4); ---> S1
+    S3,
+    0.001": IF (S(3)=0) [@CS1, @CONT]
+        @CS1: ADD B(1); ---> S1
+        @CONT: IF (S(3)=1) [@CS2, @CONT]
+            @CS2: ADD B(2); ---> S1
+            @CONT: IF (S(3)=2) [@CS3, @CS4]
+                @CS3: ADD B(3); ---> S1
+                @CS4: ADD B(4); ---> S1
+
+\******************
+\ Head entries time
+\******************
+S.S.7
+    S1,
+    #Z^HE: IF Z=0 [@ITI, @STIM]
+        @ITI: ---> S4 \save head entries during ITI
+        @STIM: IF Z=1 [@TONE, @WHITE]
+            @TONE: ---> S2 \save head entries during tone
+            @WHITE: ---> S3 \save head entries during white noise
+
+    S2,
+    0.01": SET P(0)=P(0)+0.01; SET P(1)=P(1)+0.01; ---> S1 \head entries time total and during tone
+
+    S3,
+    0.01": SET P(0)=P(0)+0.01; SET P(2)=P(2)+0.01; ---> S1 \head entries time total and during white noise
+
+    S4,
+    0.01": SET P(0)=P(0)+0.01; SET P(3)=P(3)+0.01; ---> S1 \head entries time total and during ITI
+
+\***************
+\DISPLAY MODULE
+\***************
+S.S.8
+    S1,
+    #START: ---> S2
+
+    S2,
+    0.001": SHOW 1, Time elapsed, T ; SHOW 2, Total HE Tone, A(0); SHOW 3, Total HE WN, B(0); SHOW 4, Total HE ITI, C(0);
+    SHOW 5, HE T1, A(1); SHOW 6, HE T2, A(2); SHOW 7, HE T3, A(3); SHOW 8, HE T4, A(4);
+    SHOW 9, HE WN1, B(1); SHOW 10, HE WN2, B(2); SHOW 11, HE WN3, B(3); SHOW 12, HE WN4, B(4);
+    SHOW 13, HE time, P(0);
+    SHOW 14, CS, S(0);   ---> Sx
+

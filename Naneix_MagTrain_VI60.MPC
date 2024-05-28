@@ -1,0 +1,131 @@
+\*************************************************
+\ Magazine training
+\*************************************************
+
+\NaneixLab 2021
+\Written by Fabien Naneix
+\Program runs for 30 min min. 30 pellets delivered on VI60
+
+\********
+\ INPUTS
+\********
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^PELLET = 3
+^HLIGHT = 6
+^FAN = 9
+^MAG_LIGHT = 10
+
+\**********
+\ VARIABLES
+\**********
+\A = COUNTERS -> A(0), Pellet max ; A(1), Pellets delivered; A(2), Visits
+\B = ONSET VISITS
+\C = OFFSET VISITS
+\D =
+\E =
+\F =
+\G =
+\H =
+\I = LIST ITI
+\J = ITI SELECTED WITHOUT REPLACEMENT
+\K = ITI IN SECONDS
+\L =
+\M = MAX pellet
+\N =
+\O = VISIT TOGGLE
+\P =
+\Q =
+\R =
+\S =
+\T = TIME
+\U =
+\V =
+\W =
+\X =
+\Y =
+\Z =
+
+\******
+\ ARRAY
+\******
+DIM B = 10000
+DIM C = 10000
+
+
+\******
+\LISTS
+\******
+LIST A = 0, 0, 0
+LIST I = 68, 45, 64, 50, 35, 72, 85, 49, 76, 74, 72, 30, 82, 89, 74, 30, 72, 41, 33, 56, 81, 32, 45, 47, 88, 60, 87, 55, 82, 61 \list ITI (VI 60 sec)
+
+
+\*************************************
+\ Initialize program, arrays and timer
+\*************************************
+S.S.1,
+        S1,
+        #START: ON ^HLIGHT, ^FAN; SET T = 0, A(0) = 30, A(1) = 0;---> S2 \turns house light and fan ON, setup max trial number
+
+        S2,
+        0.01": SET T = T + 0.01; ---> Sx
+
+\********************
+\ Pellet delivery program
+\********************
+S.S.2,
+        S1,
+        #START: ---> S2
+
+        S2,
+        0.001": RANDD J = I; SET K = J * 1"; ---> S3 \select ITI randomly from I list and convert it in second (K)
+
+        S3,
+        K#T: ON^PELLET, ^MAG_LIGHT; ADD A(1); ---> S4 \Deliver pellet and add 1 to pellet counter
+
+        S4,
+        1": OFF^PELLET, ^MAG_LIGHT; ---> S5 \restart the pellet delivery system
+
+        S5,
+        0.001": IF A(1) >= A(0) [@END, @CONTINUE] \Compare current number of trials to max -> if >= then it stops the session
+            @END: ---> S6
+            @CONTINUE: ---> S2
+
+        S6,
+        60": OFF ^HLight, ^Fan ---> STOPABORTFLUSH \end program and save data
+
+
+\****************
+\ VISITS COUNTER
+\****************
+S.S.3 \magazine toggle to detect onset and offset of the visits
+        S1,
+        #START: ---> S2
+
+        S2,
+        #R^VISITS: SET O = 1; Z1; ---> S2 \Detect visit, set the toggle the 1
+        0.02": SET O = 0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+S.S.4 \magazine entries
+        S1,
+        #Z1: SET B(A(2)) = T; ---> S2
+
+        S2,
+        0.02": IF O = 0 [@VISITOFF, @CONTINUE] /when visit stops save offset time and increment number of total and cs+ visits
+            @VISITOFF: SET O = 0, C(A(2)) = T; ADD A(2); SET B(A(2)) = -987.987, C(A(2)) = -987.987; ---> S1
+            @CONTINUE: ---> S2
+
+\***************
+\DISPLAY MODULE*
+\***************
+S.S.10
+        S1,
+        #START: ---> S2
+
+S2,
+        0.001": SHOW 1, Time elapsed, T; SHOW 2, Total visits, A(2); SHOW 3, Pellets delivered, A(1) ;---> Sx
+
+

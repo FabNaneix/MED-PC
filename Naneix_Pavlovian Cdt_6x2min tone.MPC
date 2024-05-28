@@ -1,0 +1,205 @@
+\*************************************************
+\ Pavlovian conditioning Tone
+\*************************************************
+
+\NaneixLab
+\Written by Fabien Naneix
+\HLight and fan on. 6 presentations of Tone (2 min each). Food pellet in VI30 during Tone. No levers
+\Last edited May 2024
+
+\********
+\ INPUTS
+\********
+^VISITS = 3
+
+\*********
+\ OUTPUTS
+\*********
+^PELLET = 3
+^HLIGHT = 6
+^TONE = 8
+^FAN = 9
+^WN = 11
+
+\**********
+\ VARIABLES
+\**********
+\A = Head entries Tone -> A(0)=Total, A(1)=Tone1, A(2)=Tone2, A(3)=Tone3, A(4)=Tone4, A(5)=Tone5, A(6)=Tone6
+\B = Head entries ITI -> C(0)=Total
+\C = Pellet ITI in sec
+\D = Current ITI selected for pellet delivery from list E
+\E = List ITI for pellet delivery (VI30)
+\F = Onset Tone
+\G = Offset Tone
+\H = Onset head entries Tone
+\I = Offset head entries Tone
+\J = Pellet array
+\K = Pellet counter
+\L =
+\M =
+\N = Onset head entries ITI
+\O = Offset head entries ITI
+\P = Time spent in magazine (0=Total, 1=Tone, 2=ITI)
+\Q = Pellet counter
+\R = Visit toggle
+\S = Stimuli counters -> S(0)=current nbr stim, S(1)=total nbr of stim
+\T = Time
+\U = Time max
+\V = Selected ITI from list W
+\W = List ITI
+\X = ITI in sec
+\Y =
+\Z = current state (0=ITI, 1=tone, 2=white noise)
+
+\******
+\ ARRAY
+\******
+DIM F = 6 \tone onset
+DIM G = 6 \tone offset
+DIM H = 10000 \timing of head entries onset Tone
+DIM I = 10000 \timing of head entries offset Tone
+DIM J = 10000 \timing pellet delivery
+DIM N = 10000 \timing of head entries onset ITI
+DIM O = 10000 \timing of head entries offset ITI
+
+\******
+\LISTS
+\******
+LIST A = 0, 0, 0, 0, 0, 0, 0
+LIST B = 0
+LIST E = 29, 40, 15, 31, 16, 18, 29, 33, 23, 18, 20, 37, 25, 43, 38, 39, 43, 45, 17, 31, 31, 33, 34, 15, 17, 45, 41, 18, 21, 42 \list ITI (VI 30 sec)
+LIST P = 0, 0, 0
+LIST S = 0, 0
+LIST W = 240, 240, 420, 180, 420, 360, 420, 300, 300 \ITI between 3 and 7 min (avg 5 min)
+
+\********
+\Z-PULSES
+\********
+^HE = 1 \head entries toggle
+^HET = 2 \head entries during tone
+^HEITI = 3 \head entries during ITI
+^STIM = 4 \stimulus on
+
+\*************************************************
+\ Initialize program, timer and end time condition
+\*************************************************
+S.S.1,
+    S1,
+    #START: ON ^HLIGHT, ^FAN; SET T = 0, S(0) = 0, S(1) = 6;---> S2 \turns house light and fan ON, setup time at 0
+
+    S2,
+    0.01": SET T = T + 0.01; IF T >= 3600 [@END, @CONTINUE] \increment time with 0.01 sec
+        @END: OFF ^HLight, ^Fan; ---> STOPABORTFLUSH \end program and save data after 60 min
+        @CONTINUE: ---> Sx
+
+\**************************************
+\ Variable ITI and stimuli presentation
+\**************************************
+S.S.2,
+     S1,
+     #START: RANDD V=W; SET X=V*1"; SET Z=0; ---> S2 \select ITI randomly from list W and convert it in second (X)
+
+     S2,
+     X#T: ---> S3
+
+     S3,
+     0.001": ON^TONE; SET F(S(0))=T; SET Z=1; Z^STIM; ---> S4 \start tone, record time, record stim type in Q
+
+     S4,
+     120": OFF^TONE; SET G(S(0))=T; ADD S(0); SET F(S(0))=-987.987, G(S(0))=-987.987; IF S(0)=S(1) [@END, @CONTINUE] \stop tone after 2min, add stim nbr, record time
+         @END: RANDD V=W; SET X=V*1"; SET Z=0; ---> S5
+         @CONTINUE:RANDD V=W; SET X=V*1"; SET Z=0; ---> S2
+
+     S5,
+     X#T: OFF ^HLight, ^Fan; ---> STOPABORTFLUSH \end program and save data at the end of the last ITI
+
+
+\*********************
+\ Head Entries counter
+\*********************
+S.S.3 \magazine toggle to detect onset and offset of head entries
+    S1,
+    #START: ---> S2
+
+    S2,
+    #R^VISITS: SET R=1; Z^HE; ---> S2 \Detect visit, set the toggle the 1
+    0.02": SET R=0; ---> S2 \If nothing happens during 20 msec, toggle is reset
+
+
+S.S.4 \total head entries counter
+    S1,
+    #Z^HE: IF Z=0 [@ITI, @STIM]
+    @ITI: SET N(B(0))=T; ---> S3 \save head entries during ITI
+    @STIM: SET H(A(0))=T; ---> S2 \save head entries during tone
+
+    S2, \head entries during tone
+    0.02": IF R=0 [@VISITOFF, @CONTINUE] \when head entries stops, save offset time and increment number of head entries
+        @VISITOFF: SET I(A(0))=T; ADD A(0); SET H(A(0))=-987.987, I(A(0))=-987.987; Z^HET; ---> S1
+        @CONTINUE: ---> S2
+
+    S3, \head entries during ITI
+    0.02": IF R=0 [@VISITOFF, @CONTINUE] \when head entries stops, save offset time and increment number of head entries
+        @VISITOFF: SET O(B(0))=T; ADD B(0); SET N(B(0))=-987.987, O(B(0))=-987.987; Z^HEITI; ---> S1
+        @CONTINUE: ---> S3
+
+S.S.5 \head entries counter per stim or ITI
+    S1,
+    #Z^HET: ---> S2
+
+    S2,
+    0.001": IF (S(0)=0) [@CS1, @CONT]
+        @CS1: ADD A(1); ---> S1
+        @CONT: IF (S(0)=1) [@CS2, @CONT]
+            @CS2: ADD A(2); ---> S1
+            @CONT: IF (S(0)=2) [@CS3, @CONT]
+                @CS3: ADD A(3); ---> S1
+                @CONT: IF (S(0)=3) [@CS4, @CONT]
+                    @CS4: ADD A(4); ---> S1
+                    @CONT: IF (S(0)=4) [@CS5, @CS6]
+                        @CS5: ADD A(5); ---> S1
+                        @CS6: ADD A(6); ---> S1
+
+\******************
+\ Head entries time
+\******************
+S.S.6
+    S1,
+    #Z^HE: IF Z=0 [@ITI, @STIM]
+    @ITI: ---> S3
+    @STIM: ---> S2
+
+    S2,
+    0.01": SET P(0)=P(0)+0.01; SET P(1)=P(1)+0.01; ---> S1 \head entries time total and during tone
+
+    S3,
+    0.01": SET P(0)=P(0)+0.01; SET P(2)=P(2)+0.01; ---> S1 \head entries time total and during ITI
+
+\***************
+\PELLET DELIVERY
+\***************
+S.S.7
+    S1,
+    #Z^STIM: SET Q=0; ---> S2
+
+    S2,
+    0.001": RANDD D=E; SET C=D*1"; ---> S3
+
+    S3,
+    C#T: ON^PELLET; ADD Q; SET J(K)=T; ---> S4
+
+    S4,
+    1": OFF^PELLET; ADD K; SET J(K)=-987.987; IF Q<4 [@CONT, @STOP]
+        @CONT: ---> S2
+        @STOP: ---> S1
+
+\***************
+\DISPLAY MODULE
+\***************
+S.S.8
+    S1,
+    #START: ---> S2
+
+    S2,
+    0.001": SHOW 1, Time elapsed, T ; SHOW 2, Total HE Tone, A(0); SHOW 3, Total HE ITI, B(0);
+    SHOW 4, HE T1, A(1); SHOW 5, HE T2, A(2); SHOW 6, HE T3, A(3); SHOW 7, HE T4, A(4); SHOW 8, HE T5, A(5); SHOW 9, HE T6, A(6);
+    SHOW 10, Pellets, K; SHOW 11, HE time, P(0); SHOW 12, Stim, S(0);   ---> Sx
